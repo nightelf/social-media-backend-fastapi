@@ -1,10 +1,10 @@
 # social-media-backend-fastapi
 
 FastAPI implementation of the shared social-media API. One of two interchangeable backends — it
-satisfies the same [API contract](../social-media-deploy/API_CONTRACT.md) as
+satisfies the same [API contract](https://github.com/nightelf/social-media-deploy/blob/main/API_CONTRACT.md) as
 `social-media-backend-django`.
 
-> For the full-stack local setup, see the **[deploy repo README](../social-media-deploy/README.md)**.
+> For the full-stack local setup, see the **[deploy repo README](https://github.com/nightelf/social-media-deploy/blob/main/README.md)**.
 > This file covers running the FastAPI backend on its own.
 
 ## Stack
@@ -31,6 +31,7 @@ alembic/               # migration env + versions
 
 ## Run standalone (outside Docker)
 ```bash
+git clone git@github.com:nightelf/social-media-backend-fastapi.git && cd social-media-backend-fastapi
 cp .env.example .env                 # set DATABASE_URL (asyncpg, db: social_fastapi)
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
@@ -48,7 +49,7 @@ uvicorn app.main:app --reload --port 8000
 | `python -m app.seed` | Seed demo data (idempotent) |
 
 ## Endpoints
-- API under `/api/` (see the [contract](../social-media-deploy/API_CONTRACT.md))
+- API under `/api/` (see the [contract](https://github.com/nightelf/social-media-deploy/blob/main/API_CONTRACT.md))
 - Swagger UI: `/docs` · ReDoc: `/redoc` · OpenAPI JSON: `/openapi.json`
 
 ## Notes
