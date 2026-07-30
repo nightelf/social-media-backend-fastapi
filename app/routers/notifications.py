@@ -48,3 +48,20 @@ async def list_notifications(
         "total": total,
         "total_pages": (total + pag.page_size - 1) // pag.page_size,
     }
+
+
+@router.get('/unread-count')
+async def notifications_unread_count(
+        user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    total = await db.scalar(
+        select(func.count(Notification.id)).where(
+            Notification.recipient_id == user.id,
+            Notification.read_at.is_(None)
+        )
+    )
+
+    return {
+        "count": total
+    }

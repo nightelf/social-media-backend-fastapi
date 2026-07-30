@@ -82,3 +82,38 @@ async def test_empty_when_no_notifications(client, make_user):
     assert data["total"] == 0
     assert data["results"] == []
     assert data["total_pages"] == 0
+
+
+# ---- GET /api/notifications/unread-count ----------------------------------
+
+async def test_unread_count_excludes_read(client, make_user, make_notification):
+    """The count must be unread-only — catches a WHERE clause that drops the read_at filter."""
+    alice = await make_user()
+    bob = await make_user()
+    await make_notification(recipient=alice, actor=bob, type_=NotificationType.FOLLOW, read=False)
+    await make_notification(recipient=alice, actor=bob, type_=NotificationType.LIKE, read=False)
+    await make_notification(recipient=alice, actor=bob, type_=NotificationType.FOLLOW, read=True)  # excluded
+
+    data = (await client.get("/api/notifications/unread-count", headers=auth_header(alice))).json()
+    assert data == {"count": 2}
+
+
+async def test_unread_count_is_recipient_scoped(client, make_user, make_notification):
+    alice = await make_user()
+    bob = await make_user()
+    await make_notification(recipient=alice, actor=bob, type_=NotificationType.FOLLOW)
+    await make_notification(recipient=bob, actor=alice, type_=NotificationType.FOLLOW)  # not alice's
+
+    count = (await client.get("/api/notifications/unread-count", headers=auth_header(alice))).json()["count"]
+    assert count == 1
+
+
+async def test_unread_count_zero_when_none(client, make_user):
+    alice = await make_user()
+    data = (await client.get("/api/notifications/unread-count", headers=auth_header(alice))).json()
+    assert data == {"count": 0}
+
+
+async def test_unread_count_requires_authentication(client):
+    resp = await client.get("/api/notifications/unread-count")
+    assert resp.status_code == 401
