@@ -2,12 +2,12 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+from pwdlib import PasswordHash
 
 from .config import settings
 
-# pbkdf2_sha256 is pure-python — no bcrypt version pitfalls. Used for passwords AND codes.
-_pwd = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+# Argon2id via pwdlib (maintained). Used for passwords AND verification codes.
+_pwd = PasswordHash.recommended()
 
 ALGORITHM = "HS256"
 
