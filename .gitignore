@@ -5,3 +5,6 @@ __pycache__/
 !.env.example
 .DS_Store
 .venv/
+venv/
+.idea
+.pytest_cache/
