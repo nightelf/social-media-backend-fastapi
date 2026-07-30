@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import enum
 from sqlalchemy import (
     Boolean,
     DateTime,
@@ -9,6 +10,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    Enum,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -125,3 +127,22 @@ class Follow(Base):
     follower_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     followed_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class NotificationType(enum.IntEnum):
+    LIKE = 1
+    COMMENT = 2
+    FOLLOW = 3
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    recipient_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    type: Mapped[NotificationType] = mapped_column(Enum(NotificationType))
+    post_id: Mapped[int | None] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), index=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    actor: Mapped[User] = relationship(foreign_keys=[actor_id])

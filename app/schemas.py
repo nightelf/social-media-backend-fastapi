@@ -101,3 +101,12 @@ class CommentOut(BaseModel):
     body: str
     author: AuthorOut
     created_at: UTCDateTime
+
+
+class NotificationOut(BaseModel):
+    id: int
+    actor: AuthorOut
+    type: str
+    post_id: int | None
+    read_at: UTCDateTime | None
+    created_at: UTCDateTime
