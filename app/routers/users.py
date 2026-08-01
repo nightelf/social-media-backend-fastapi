@@ -5,8 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .. import errors
 from ..db import get_db
 from ..deps import get_current_user
-from ..models import Follow, User
+from ..models import Follow, User, NotificationType
 from ..schemas import MeOut, PublicUserOut
+from .notifications import notify, unnotify
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -75,6 +76,7 @@ async def follow(
     ).first()
     if not exists:
         db.add(Follow(follower_id=user.id, followed_id=target.id))
+        await notify(db, recipient_id=target.id, actor_id=user.id, type_=NotificationType.FOLLOW.name)
         await db.commit()
     followers, _ = await _counts(db, target.id)
     return {"is_following": True, "followers_count": followers}
@@ -92,6 +94,7 @@ async def unfollow(
             Follow.follower_id == user.id, Follow.followed_id == target.id
         )
     )
+    await unnotify(db, recipient_id=target.id, actor_id=user.id, type_=NotificationType.FOLLOW.name)
     await db.commit()
     followers, _ = await _counts(db, target.id)
     return {"is_following": False, "followers_count": followers}

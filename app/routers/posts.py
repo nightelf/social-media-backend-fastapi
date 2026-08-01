@@ -7,8 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .. import errors
 from ..db import get_db
 from ..deps import Pagination, get_current_user
-from ..models import Comment, Follow, Like, Post, User
+from ..models import Comment, Follow, Like, Post, User, NotificationType
 from ..schemas import AuthorOut, CommentIn, CommentOut, PostIn, PostOut
+from .notifications import notify, unnotify
 
 router = APIRouter(prefix="/api/posts", tags=["posts"])
 
@@ -134,7 +135,8 @@ async def like_post(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not await db.get(Post, post_id):
+    post = await db.get(Post, post_id)
+    if not post:
         raise errors.not_found("No such post.")
     exists = (
         await db.execute(
@@ -143,6 +145,7 @@ async def like_post(
     ).first()
     if not exists:
         db.add(Like(post_id=post_id, user_id=user.id))
+        await notify(db, recipient_id=post.author_id, actor_id=user.id, type_=NotificationType.LIKE.name, post_id=post.id)
         await db.commit()
     count = await db.scalar(select(func.count(Like.id)).where(Like.post_id == post_id))
     return {"liked_by_me": True, "like_count": count}
@@ -154,11 +157,13 @@ async def unlike_post(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not await db.get(Post, post_id):
+    post = await db.get(Post, post_id)
+    if not post:
         raise errors.not_found("No such post.")
     await db.execute(
         sa_delete(Like).where(Like.post_id == post_id, Like.user_id == user.id)
     )
+    await unnotify(db, recipient_id=post.author_id, actor_id=user.id, type_=NotificationType.LIKE.name, post_id=post.id)
     await db.commit()
     count = await db.scalar(select(func.count(Like.id)).where(Like.post_id == post_id))
     return {"liked_by_me": False, "like_count": count}
@@ -209,10 +214,12 @@ async def add_comment(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not await db.get(Post, post_id):
+    post = await db.get(Post, post_id)
+    if not post:
         raise errors.not_found("No such post.")
     comment = Comment(post_id=post_id, author_id=user.id, body=data.body)
     db.add(comment)
+    await notify(db, recipient_id=post.author_id, actor_id=user.id, type_=NotificationType.COMMENT.name, post_id=post.id)
     await db.commit()
     await db.refresh(comment)  # populate server-side created_at
     return CommentOut(

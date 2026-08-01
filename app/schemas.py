@@ -108,5 +108,14 @@ class NotificationOut(BaseModel):
     actor: AuthorOut
     type: str
     post_id: int | None
+    seen_at: UTCDateTime | None
     read_at: UTCDateTime | None
     created_at: UTCDateTime
+
+
+class NotificationReadIn(BaseModel):
+    notification_id: int
+
+
+class MarkReadOut(BaseModel):
+    read_at: UTCDateTime | None
