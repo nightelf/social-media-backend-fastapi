@@ -84,36 +84,95 @@ async def test_empty_when_no_notifications(client, make_user):
     assert data["total_pages"] == 0
 
 
-# ---- GET /api/notifications/unread-count ----------------------------------
+# ---- GET /api/notifications/unseen-count ----------------------------------
 
-async def test_unread_count_excludes_read(client, make_user, make_notification):
-    """The count must be unread-only — catches a WHERE clause that drops the read_at filter."""
+async def test_unseen_count_excludes_seen(client, make_user, make_notification):
+    """The badge count is unseen-only — catches a WHERE clause that drops the seen_at filter."""
     alice = await make_user()
     bob = await make_user()
-    await make_notification(recipient=alice, actor=bob, type_=NotificationType.FOLLOW, read=False)
-    await make_notification(recipient=alice, actor=bob, type_=NotificationType.LIKE, read=False)
-    await make_notification(recipient=alice, actor=bob, type_=NotificationType.FOLLOW, read=True)  # excluded
+    await make_notification(recipient=alice, actor=bob, type_=NotificationType.FOLLOW, seen=False)
+    await make_notification(recipient=alice, actor=bob, type_=NotificationType.LIKE, seen=False)
+    await make_notification(recipient=alice, actor=bob, type_=NotificationType.FOLLOW, seen=True)  # excluded
 
-    data = (await client.get("/api/notifications/unread-count", headers=auth_header(alice))).json()
+    data = (await client.get("/api/notifications/unseen-count", headers=auth_header(alice))).json()
     assert data == {"count": 2}
 
 
-async def test_unread_count_is_recipient_scoped(client, make_user, make_notification):
+async def test_unseen_count_counts_by_seen_not_read(client, make_user, make_notification):
+    """Unseen count keys off seen_at, NOT read_at — a read-but-unseen item still counts."""
+    alice = await make_user()
+    bob = await make_user()
+    # read but not seen -> still unseen for badge purposes
+    await make_notification(recipient=alice, actor=bob, type_=NotificationType.LIKE, read=True, seen=False)
+
+    data = (await client.get("/api/notifications/unseen-count", headers=auth_header(alice))).json()
+    assert data == {"count": 1}
+
+
+async def test_unseen_count_is_recipient_scoped(client, make_user, make_notification):
     alice = await make_user()
     bob = await make_user()
     await make_notification(recipient=alice, actor=bob, type_=NotificationType.FOLLOW)
     await make_notification(recipient=bob, actor=alice, type_=NotificationType.FOLLOW)  # not alice's
 
-    count = (await client.get("/api/notifications/unread-count", headers=auth_header(alice))).json()["count"]
+    count = (await client.get("/api/notifications/unseen-count", headers=auth_header(alice))).json()["count"]
     assert count == 1
 
 
-async def test_unread_count_zero_when_none(client, make_user):
+async def test_unseen_count_zero_when_none(client, make_user):
     alice = await make_user()
-    data = (await client.get("/api/notifications/unread-count", headers=auth_header(alice))).json()
+    data = (await client.get("/api/notifications/unseen-count", headers=auth_header(alice))).json()
     assert data == {"count": 0}
 
 
-async def test_unread_count_requires_authentication(client):
-    resp = await client.get("/api/notifications/unread-count")
+async def test_unseen_count_requires_authentication(client):
+    resp = await client.get("/api/notifications/unseen-count")
+    assert resp.status_code == 401
+
+
+# ---- POST /api/notifications/seen (mark all seen) -------------------------
+
+async def test_mark_seen_clears_unseen_count(client, make_user, make_notification):
+    alice = await make_user()
+    bob = await make_user()
+    await make_notification(recipient=alice, actor=bob, type_=NotificationType.FOLLOW)
+    await make_notification(recipient=alice, actor=bob, type_=NotificationType.LIKE)
+
+    resp = await client.post("/api/notifications/seen", headers=auth_header(alice))
+    assert resp.status_code == 200
+    assert resp.json() == {"count": 0}
+
+    after = (await client.get("/api/notifications/unseen-count", headers=auth_header(alice))).json()
+    assert after == {"count": 0}
+
+
+async def test_mark_seen_only_affects_own_notifications(client, make_user, make_notification):
+    """The security property: marking seen must not touch another user's notifications."""
+    alice = await make_user()
+    bob = await make_user()
+    await make_notification(recipient=alice, actor=bob, type_=NotificationType.FOLLOW)
+    await make_notification(recipient=bob, actor=alice, type_=NotificationType.FOLLOW)
+
+    await client.post("/api/notifications/seen", headers=auth_header(alice))
+
+    # bob's unseen count is untouched
+    bob_count = (await client.get("/api/notifications/unseen-count", headers=auth_header(bob))).json()["count"]
+    assert bob_count == 1
+
+
+async def test_mark_seen_does_not_touch_read_at(client, make_user, make_notification):
+    """seen and read are independent: marking seen must leave read_at alone (and vice-versa)."""
+    alice = await make_user()
+    bob = await make_user()
+    await make_notification(recipient=alice, actor=bob, type_=NotificationType.LIKE)  # unseen + unread
+
+    await client.post("/api/notifications/seen", headers=auth_header(alice))
+
+    row = (await client.get("/api/notifications", headers=auth_header(alice))).json()["results"][0]
+    assert row["seen_at"] is not None   # got marked seen
+    assert row["read_at"] is None       # but stays unread
+
+
+async def test_mark_seen_requires_authentication(client):
+    resp = await client.post("/api/notifications/seen")
     assert resp.status_code == 401

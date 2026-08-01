@@ -94,13 +94,15 @@ async def make_post(db):
 
 @pytest_asyncio.fixture
 async def make_notification(db):
-    async def _make(recipient, actor, type_, post_id=None, read=False) -> Notification:
+    async def _make(recipient, actor, type_, post_id=None, read=False, seen=False) -> Notification:
+        now = datetime.now(timezone.utc)
         n = Notification(
             recipient_id=recipient.id,
             actor_id=actor.id,
             type=type_,
             post_id=post_id,
-            read_at=datetime.now(timezone.utc) if read else None,
+            read_at=now if read else None,
+            seen_at=now if seen else None,
         )
         db.add(n)
         await db.flush()
